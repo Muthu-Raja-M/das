@@ -52,6 +52,9 @@ import GardenerImg from "../../../assets/garderner.png";
 import MessagesSection from "../../chat/components/MessagesSection";
 import Drawer from "../../../shared/components/Drawer";
 import CustomerProfileCard from "../components/CustomerProfileCard";
+import CustomerNotificationPanel from "../../notifications/components/CustomerNotificationPanel";
+import NotificationBellDropdown from "../../notifications/components/NotificationBellDropdown";
+import { getCustomerNotifications } from "../../notifications/services/notificationService";
 
 const drawerWidth = 200;
 const collapsedWidth = 72;
@@ -439,6 +442,26 @@ export default function CustomerDashboard() {
     const [open, setOpen] = React.useState(true);
     const [activeMenu, setActiveMenu] = React.useState("Home");
     const [selectedRole, setSelectedRole] = React.useState(null);
+
+    const [notifications, setNotifications] = React.useState([]);
+    const [unreadNotificationsCount, setUnreadNotificationsCount] = React.useState(0);
+
+    const fetchNotificationsList = async () => {
+        try {
+            const data = await getCustomerNotifications();
+            setNotifications(Array.isArray(data) ? data : []);
+            setUnreadNotificationsCount(Array.isArray(data) ? data.filter(n => !n.is_read).length : 0);
+        } catch (err) {
+            console.error("Error loading notifications count:", err);
+        }
+    };
+
+    React.useEffect(() => {
+        fetchNotificationsList();
+        // Polling interval: 45 seconds to reduce server load
+        const interval = setInterval(fetchNotificationsList, 45000);
+        return () => clearInterval(interval);
+    }, []);
     const [selectedState, setSelectedState] = React.useState("");
     const [selectedDistrict, setSelectedDistrict] = React.useState("");
     const [selectedWorkerName, setSelectedWorkerName] = React.useState("");
@@ -609,6 +632,7 @@ const params = new URLSearchParams({
     const navItems = [
         { text: "Home", icon: <HomeIcon sx={{ fontSize: 18 }} /> },
         { text: "My Order", icon: <AssignmentIcon sx={{ fontSize: 18 }} /> },
+        { text: "Notifications", icon: <NotificationsIcon sx={{ fontSize: 18 }} />, badge: unreadNotificationsCount },
     ];
 
     const renderDashboardContent = () => (
@@ -1093,35 +1117,13 @@ const params = new URLSearchParams({
                     </Box>
 
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
-                        <Tooltip title="Notifications">
-                            <IconButton
-                                sx={{
-                                    width: 42,
-                                    height: 42,
-                                    borderRadius: "50%",
-                                    backgroundColor: hireCount > 0 ? "#eff6ff" : "#f1f5f9",
-                                    border:
-                                        hireCount > 0
-                                            ? "1px solid #bfdbfe"
-                                            : "1px solid #e2e8f0",
-                                    "&:hover": {
-                                        backgroundColor: hireCount > 0 ? "#dbeafe" : "#e2e8f0",
-                                    },
-                                }}
-                            >
-                                <Badge
-                                    badgeContent={hireCount}
-                                    color="error"
-                                    overlap="circular"
-                                >
-                                    <NotificationsIcon
-                                        sx={{
-                                            color: hireCount > 0 ? "#1976D2" : "#0f172a",
-                                        }}
-                                    />
-                                </Badge>
-                            </IconButton>
-                        </Tooltip>
+                        <NotificationBellDropdown
+                            role="customer"
+                            notifications={notifications}
+                            unreadCount={unreadNotificationsCount}
+                            onNotificationUpdate={fetchNotificationsList}
+                            onViewAll={() => setActiveMenu("Notifications")}
+                        />
 
                         <Box
                             sx={{
@@ -1186,6 +1188,9 @@ const params = new URLSearchParams({
                 {activeMenu === "Workers" && <CustomerProfileSection />}
                 {activeMenu === "My Requests" && (
                     <CustomerRequestsSection hireCount={hireCount} />
+                )}
+                {activeMenu === "Notifications" && (
+                    <CustomerNotificationPanel onNotificationUpdate={fetchNotificationsList} />
                 )}
             </Box>
 

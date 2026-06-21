@@ -16,12 +16,16 @@ import Employeralerts from "../components/EmployerAlerts";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import WorkIcon from "@mui/icons-material/Work";
 import EmailIcon from "@mui/icons-material/Email";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 
 import Drawer from "../../../shared/components/Drawer";
 import EmployerStatsCards from "../components/EmployerStatsCards";
 import MyJobsSection from "../components/MyJobsSection";
 import MessagesSection from "../../chat/components/MessagesSection";
 import EmployerProfile from "../components/EmployerProfile";
+import EmployeeNotificationPanel from "../../notifications/components/EmployeeNotificationPanel";
+import NotificationBellDropdown from "../../notifications/components/NotificationBellDropdown";
+import { getEmployeeNotifications } from "../../notifications/services/notificationService";
 
 import { useEmployerProfile } from "../hooks/useEmployer";
 import { useHireRequests } from "../../hire-request/hooks/useHireRequest";
@@ -119,6 +123,26 @@ function EmployerDashboard() {
     const [open, setOpen] = useState(true);
     const [selectedMessageThread, setSelectedMessageThread] = useState(null);
 
+    const [notifications, setNotifications] = useState([]);
+    const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+
+    const fetchNotificationsList = async () => {
+        try {
+            const data = await getEmployeeNotifications();
+            setNotifications(Array.isArray(data) ? data : []);
+            setUnreadNotificationsCount(Array.isArray(data) ? data.filter(n => !n.is_read).length : 0);
+        } catch (err) {
+            console.error("Error loading notifications count:", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotificationsList();
+        // Polling interval: 45 seconds to reduce server load
+        const interval = setInterval(fetchNotificationsList, 45000);
+        return () => clearInterval(interval);
+    }, []);
+
     const [snackOpen, setSnackOpen] = useState(false);
     const [snackSeverity, setSnackSeverity] = useState("success");
     const [snackMsg, setSnackMsg] = useState("");
@@ -168,6 +192,7 @@ function EmployerDashboard() {
         { text: "Dashboard", icon: <DashboardIcon /> },
         { text: "My Jobs", icon: <WorkIcon />, badge: pendingRequestsCount },
         { text: "Messages", icon: <EmailIcon /> },
+        { text: "Notifications", icon: <NotificationsIcon />, badge: unreadNotificationsCount },
     ];
 
     const handleNotificationClick = () => {
@@ -236,6 +261,13 @@ function EmployerDashboard() {
                         ) : null}
 
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                            <NotificationBellDropdown
+                                role="employer"
+                                notifications={notifications}
+                                unreadCount={unreadNotificationsCount}
+                                onNotificationUpdate={fetchNotificationsList}
+                                onViewAll={() => setActiveMenu("Notifications")}
+                            />
                             <Employeralerts employer={employerProfile} />
                         </Box>
 
@@ -334,6 +366,10 @@ function EmployerDashboard() {
 
                 {activeMenu === "Messages" && (
                     <MessagesSection selectedThreadFromJob={selectedMessageThread} />
+                )}
+
+                {activeMenu === "Notifications" && (
+                    <EmployeeNotificationPanel onNotificationUpdate={fetchNotificationsList} />
                 )}
             </Box>
 
