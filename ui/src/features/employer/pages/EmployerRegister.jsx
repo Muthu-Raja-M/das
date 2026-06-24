@@ -85,6 +85,13 @@ function EmployerRegistration() {
 
         password: Yup.string()
             .min(8, "Password must be at least 8 characters")
+            .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
+            .matches(/[a-z]/, "Password must contain at least one lowercase letter")
+            .matches(/\d/, "Password must contain at least one number")
+            .matches(
+                /[!@#$%^&*(),.?":{}|<>]/,
+                "Password must contain at least one special character"
+            )
             .required("Password is required"),
 
         confirmPassword: Yup.string()
@@ -131,7 +138,25 @@ function EmployerRegistration() {
             formik.resetForm();
         },
         onError: (error) => {
-            setErrorMessage(error.message || "Registration failed");
+            let errorMsg = "Registration failed";
+            if (error?.response?.data) {
+                if (typeof error.response.data === "string") {
+                    errorMsg = error.response.data;
+                } else if (error.response.data.error) {
+                    errorMsg = error.response.data.error;
+                } else if (error.response.data.message) {
+                    errorMsg = error.response.data.message;
+                } else {
+                    const keys = Object.keys(error.response.data);
+                    if (keys.length > 0) {
+                        const firstError = error.response.data[keys[0]];
+                        errorMsg = Array.isArray(firstError) ? firstError[0] : firstError;
+                    }
+                }
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
+            setErrorMessage(errorMsg);
             setOpenError(true);
         },
     });

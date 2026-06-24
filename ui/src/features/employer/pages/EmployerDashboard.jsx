@@ -12,7 +12,6 @@ import {
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import MuiAppBar from "@mui/material/AppBar";
-import Employeralerts from "../components/EmployerAlerts";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import WorkIcon from "@mui/icons-material/Work";
 import EmailIcon from "@mui/icons-material/Email";
@@ -268,7 +267,6 @@ function EmployerDashboard() {
                                 onNotificationUpdate={fetchNotificationsList}
                                 onViewAll={() => setActiveMenu("Notifications")}
                             />
-                            <Employeralerts employer={employerProfile} />
                         </Box>
 
                         <Avatar

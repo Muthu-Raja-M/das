@@ -20,13 +20,27 @@ export const useCreateCustomer = () => {
         },
 
         onError: (error) => {
+            let errorMsg = "Registration failed ❌";
+            if (error?.response?.data) {
+                if (typeof error.response.data === "string") {
+                    errorMsg = error.response.data;
+                } else if (error.response.data.error) {
+                    errorMsg = error.response.data.error;
+                } else if (error.response.data.message) {
+                    errorMsg = error.response.data.message;
+                } else {
+                    const keys = Object.keys(error.response.data);
+                    if (keys.length > 0) {
+                        const firstError = error.response.data[keys[0]];
+                        errorMsg = Array.isArray(firstError) ? firstError[0] : firstError;
+                    }
+                }
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
             updateSnackbar({
                 severity: "error",
-                message:
-                    error?.response?.data?.message ||
-                    error?.response?.data?.error ||
-                    error.message ||
-                    "Registration failed ❌",
+                message: errorMsg,
             });
         },
     });

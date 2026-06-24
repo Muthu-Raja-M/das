@@ -25,7 +25,14 @@ const validationSchema = Yup.object({
         .matches(/^[0-9]{12}$/, "Aadhaar must be 12 digits"),
     password: Yup.string()
         .required("Password is required")
-        .min(6, "Password must be at least 6 characters"),
+        .min(8, "Password must be at least 8 characters")
+        .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
+        .matches(/[a-z]/, "Password must contain at least one lowercase letter")
+        .matches(/\d/, "Password must contain at least one number")
+        .matches(
+            /[!@#$%^&*(),.?":{}|<>]/,
+            "Password must contain at least one special character"
+        ),
     confirmPassword: Yup.string()
         .required("Confirm password is required")
         .oneOf([Yup.ref("password")], "Passwords must match"),
@@ -61,15 +68,15 @@ function CustomerRegister() {
     const mutation = useCreateCustomer();
     const getPasswordStrength = (password) => {
         if (!password) return "";
-        if (password.length < 6) return "Weak";
-        if (password.length < 10) return "Medium";
+        if (password.length < 8) return "Weak";
+        if (password.length < 12) return "Medium";
         return "Strong";
     };
 
     const getStrengthColor = (password) => {
         if (!password) return "#999";
-        if (password.length < 6) return "red";
-        if (password.length < 10) return "#f59e0b";
+        if (password.length < 8) return "red";
+        if (password.length < 12) return "#f59e0b";
         return "green";
     };
 

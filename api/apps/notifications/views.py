@@ -199,3 +199,20 @@ def reject_hire_request_api(request, request_id):
     except Exception as e:
         logger.exception("Error rejecting hire request: %s", e)
         return Response({"error": "An error occurred during status update"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["POST"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def mark_all_notifications_as_read(request):
+    try:
+        Notification.objects.filter(
+            recipient_type=request.user.role,
+            recipient_id=request.user.id,
+            is_read=False,
+            is_deleted=False
+        ).update(is_read=True)
+        return Response({"message": "All notifications marked as read"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.exception("Error marking all notifications as read: %s", e)
+        return Response({"error": "An error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

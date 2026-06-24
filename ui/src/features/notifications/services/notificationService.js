@@ -19,3 +19,8 @@ export const acceptHireRequest = async (id) => {
 export const rejectHireRequest = async (id) => {
     return await API.post(`/hirerequest/${id}/reject/`);
 };
+
+export const markAllAsRead = async () => {
+    return await API.post("/notifications/read-all/");
+};
+
