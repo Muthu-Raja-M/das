@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: blueconnect-db
+    environment:
+      POSTGRES_DB: blue_connect_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kavyadhas}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - blueconnect-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d blue_connect_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: blueconnect-backend
+    environment:
+      - DB_NAME=blue_connect_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-kavyadhas}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-z(fahe^&n)u_ya9zt#1jgt_wzvm@uz6mu)gr5aa=(6qv*jln=+}
+      - DEBUG=True
+      - ALLOWED_HOSTS=127.0.0.1,localhost,backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app
+      - django_media:/app/media
+    networks:
+      - blueconnect-net
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/auth/login/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: blueconnect-frontend
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
+    networks:
+      - blueconnect-net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5173/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  django_media:
+    driver: local
+
+networks:
+  blueconnect-net:
+    driver: bridge

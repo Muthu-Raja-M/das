@@ -1,0 +1,15 @@
+.git
+.venv
+node_modules
+dist
+db.sqlite3
+api/db.sqlite3
+api/.env
+api/__pycache__/
+api/media/verification/
+ui/node_modules/
+ui/dist/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
