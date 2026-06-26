@@ -168,7 +168,9 @@ docker compose ps
 ```
 The application will be accessible at:
 * **Frontend Application**: `http://localhost:5173/`
-* **Backend API Console**: `http://localhost:8000/api/`
+* **Customer Lists**: `http://localhost:8000/api/customer/list/`
+* **Employer Lists**: `http://localhost:8000/api/employer/list/`
+* **Admin Statistics**: `http://localhost:8000/api/adminpanel/stats/`
 
 ---
 
@@ -252,7 +254,9 @@ Copy `api/.env.example` to `api/.env` and update the values:
 ## Default URLs Reference
 
 * **Frontend App**: `http://localhost:5173/`
-* **REST API Endpoint**: `http://localhost:8000/api/`
+* **Customer Lists**: `http://localhost:8000/api/customer/list/`
+* **Employer Lists**: `http://localhost:8000/api/employer/list/`
+* **Admin Statistics**: `http://localhost:8000/api/adminpanel/stats/`
 * **Django Admin Panel**: `http://localhost:8000/admin/`
 * **Media Assets Root**: `http://localhost:8000/media/`
 
