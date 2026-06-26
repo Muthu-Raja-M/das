@@ -170,9 +170,6 @@ The application will be accessible at:
 * **Frontend Application**: `http://localhost:5173/`
 * **Backend API Console**: `http://localhost:8000/api/`
 
-Customer Lists: http://localhost:8000/api/customer/list/
-Employer Lists: http://localhost:8000/api/employer/list/
-Admin Statistics: http://localhost:8000/api/adminpanel/stats/
 ---
 
 ### Option 2: Local Development Setup
