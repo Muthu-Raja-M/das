@@ -25,13 +25,6 @@ logger = logging.getLogger(__name__)
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated, IsCustomerUser])
 def create_hire_request(request):
-    print("--------------------------------------------------")
-    print("DEBUG: create_hire_request view reached!")
-    print("DEBUG: User:", request.user)
-    print("DEBUG: User Authenticated:", request.user.is_authenticated if request.user else False)
-    print("DEBUG: User Role:", getattr(request.user, "role", None) if request.user else None)
-    print("DEBUG: Request Auth Header:", request.headers.get("Authorization"))
-    print("--------------------------------------------------")
     try:
         with transaction.atomic():
             serializer = HireRequestSerializer(data=request.data)

@@ -48,39 +48,18 @@ class CustomJWTAuthentication(JWTAuthentication):
             try:
                 user_obj = Customer.objects.get(id=user_id)
             except Customer.DoesNotExist:
-                pass
+                return None
         elif role == "employer":
             try:
                 user_obj = Employer.objects.get(id=user_id)
             except Employer.DoesNotExist:
-                pass
+                return None
         elif role == "admin":
             try:
                 user_obj = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                pass
-
-        # Robust secure fallback: If user_obj was not resolved or role is missing,
-        # lookup using the globally unique email address to resolve role and user object.
-        if user_obj is None and email:
-            # 1. Try Customer
-            try:
-                user_obj = Customer.objects.get(email=email)
-                role = "customer"
-            except Customer.DoesNotExist:
-                # 2. Try Employer
-                try:
-                    user_obj = Employer.objects.get(email=email)
-                    role = "employer"
-                except Employer.DoesNotExist:
-                    # 3. Try Admin
-                    try:
-                        user_obj = User.objects.get(email=email)
-                        role = "admin"
-                    except User.DoesNotExist:
-                        return None
-
-        if user_obj is None:
+                return None
+        else:
             return None
 
         return (AuthenticatedUser(user_obj, role, email), validated_token)
