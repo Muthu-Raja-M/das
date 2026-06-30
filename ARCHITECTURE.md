@@ -42,7 +42,11 @@ The backend follows the standard **Django MTV (Model-Template-View) Pattern** ad
   * `views.py`: Request handlers, logic checks, status code returns, and JSON responses.
   * `serializers.py`: Marshals database queries into JSON and validates incoming payloads.
   * `urls.py`: App-specific routes mapped to backend view methods.
-* **Common Library (`api/common/`)**: Core utility algorithms (e.g. complexity validators, OTEL tracers, and metrics exporters).
+* **Permissions Layer (`api/common/permissions/`)**: Centralized authentication and authorization guards:
+  * `auth.py`: `CustomJWTAuthentication` — resolves JWT tokens to Customer, Employer, or Admin user objects.
+  * `roles.py`: Role-based permission classes (`IsCustomerUser`, `IsEmployerUser`, `IsAdminUser`).
+  * `ownership.py`: Object-level BOLA validators (`IsProfileOwner`, `IsHireRequestEmployer`, `IsConversationParticipant`, `IsMessageSenderAndParticipant`).
+* **Common Library (`api/common/utils/`)**: Core utility algorithms (e.g. complexity validators, OTEL tracers, and metrics exporters).
 
 ---
 

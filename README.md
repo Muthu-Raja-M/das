@@ -23,11 +23,14 @@ The platform provides a secure environment for customers to locate verified, loc
 * **Detailed Profiles**: Review provider experience, daily rates, and contact details.
 * **Hire Requests**: Book gig workers with direct task description payloads.
 * **Service Status Tracking**: Monitor request status updates (Pending, Accepted, Rejected, Completed).
+* **Job Progress Tracker**: View a synchronized vertical stepper timeline showing job milestones (Work Accepted → Location Arrived → Work Completed → Payment Completed).
 
 ### 2. Employer Module
 * **Profile Management**: Update category, address, experience, and daily rate fields.
 * **KYC Upload Console**: Submit face images, Aadhaar cards, PAN cards, and driving licenses.
 * **Booking Pipeline**: Review, accept, or reject incoming hire requests.
+* **Job Progress Management**: Advance jobs through the stepper — verify OTP on arrival, mark work complete, and submit payment.
+* **OTP Location Verification**: Validate a 6-digit OTP provided by the customer to confirm physical arrival.
 
 ### 3. Admin Module
 * **Dashboard Stats**: Real-time counts of total customers, total employers, pending audits, and verified users.
@@ -37,6 +40,7 @@ The platform provides a secure environment for customers to locate verified, loc
 ### 4. System Services
 * **JWT Authentication**: Secure login sessions with access and refresh tokens.
 * **Role-Based Access Control (RBAC)**: Route guards and endpoint validation based on user role (Customer, Employer, Admin).
+* **Object-Level Permissions (BOLA Protection)**: Fine-grained ownership checks on every API — users can only access their own resources.
 * **Password Recovery OTP**: Reset credentials via email codes using SendGrid.
 * **Interactive Messaging**: Direct text messaging unlocked upon request acceptance.
 * **System Alerts**: Instant notification counts for status modifications and verification reviews.
@@ -101,12 +105,16 @@ blue-connect-feature-login/
 │   │   ├── authentication/          # User login, session, and token refresh
 │   │   ├── customer/                # Customer profile creation and fetching
 │   │   ├── employer/                # Employer profile details and categories
-│   │   ├── hire_request/            # Hire request creations and updates
+│   │   ├── hire_request/            # Hire requests, job progress, and OTP verification
 │   │   ├── messaging/               # In-app chat messaging between users
-│   │   ├── notifications/           # Triggers alerts and JWT auth interceptors
+│   │   ├── notifications/           # Triggers alerts and notification management
 │   │   ├── password_reset/          # OTP creation, validation, and email dispatch
 │   │   └── verification/            # Documents KYC storage and approval views
 │   ├── common/                      # Shared helper utility files
+│   │   ├── permissions/             # JWT auth, role checks, and ownership validators
+│   │   │   ├── auth.py              # CustomJWTAuthentication & AuthenticatedUser
+│   │   │   ├── roles.py             # IsAdminUser, IsCustomerUser, IsEmployerUser
+│   │   │   └── ownership.py         # BOLA: IsProfileOwner, IsHireRequestEmployer, etc.
 │   │   └── utils/                   # otel_metrics.py, telemetry.py, password_validation.py
 │   ├── config/                      # Root configuration (settings.py, urls.py)
 │   ├── media/                       # Uploaded identity images
@@ -114,10 +122,18 @@ blue-connect-feature-login/
 └── ui/                              # React Frontend Service
     ├── public/                      # Static client files
     ├── src/                         # React UI code
-    │   ├── api/                     # Axios instance and base request setup
+    │   ├── api/                     # Axios instance, interceptors, and base request setup
     │   ├── app/                     # React App entry and client routing mapping
     │   ├── assets/                  # Images, logo and category icons
     │   ├── features/                # Domain-specific components and pages
+    │   │   ├── auth/                # Login, forgot password pages
+    │   │   ├── customer/            # Customer dashboard and profile pages
+    │   │   ├── employer/            # Employer dashboard, stats cards, and components
+    │   │   ├── hire-request/        # JobProgressDialog, useHireRequest hooks, services
+    │   │   ├── chat/                # useMessages hooks and messaging services
+    │   │   ├── notifications/       # NotificationBellDropdown and notification services
+    │   │   ├── admin/               # Admin dashboard pages
+    │   │   └── verification/        # Employer document upload and admin review
     │   └── shared/                  # Common navbars, footers, and providers
     └── package.json                 # Node package dependencies
 ```
@@ -269,11 +285,12 @@ Copy `api/.env.example` to `api/.env` and update the values:
 * **`adminpanel`**: Compiles dashboard metrics and handles customer account removal.
 * **`verification`**: Saves KYC files (Face, Aadhaar, PAN, License) and processes admin approvals/rejections.
 * **`messaging`**: Handles thread listings and direct messaging.
-* **`hire_request`**: Manages hire requests, updates, and booking logs.
+* **`hire_request`**: Manages hire requests, status updates, job progress stepper, OTP verification, and payment tracking.
 * **`authentication`**: Login handler and JWT token manager.
 * **`password_reset`**: Verifies accounts, sends email OTPs, and resets passwords.
 * **`notifications`**: Manages real-time alert logs.
-* **`common`**: Shared utilities, telemetry hooks, and password complexity check files.
+* **`common/permissions`**: Centralized security layer with JWT authentication (`CustomJWTAuthentication`), role-based guards (`IsCustomerUser`, `IsEmployerUser`, `IsAdminUser`), and object-level ownership validators (`IsProfileOwner`, `IsHireRequestEmployer`, `IsConversationParticipant`).
+* **`common/utils`**: Shared utilities, telemetry hooks, and password complexity check files.
 * **`config`**: General Django settings, database configs, and root URL patterns.
 
 ---
@@ -284,7 +301,11 @@ Copy `api/.env.example` to `api/.env` and update the values:
 * **`/api/customer/`**: Customer signups and profile retrievals.
 * **`/api/employer/`**: Employer registrations, verified provider searches, detailed queries, profile updates, and verification status controls.
 * **`/api/verification/`**: KYC uploads and admin approval portals.
-* **`/api/hirerequest/`**: Booking request creation, status changes, and statistics tracking.
+* **`/api/hirerequest/`**: Booking request creation, status changes, statistics tracking, and job progress management.
+  * **`/api/hirerequest/progress/<id>/`**: Get job progress timeline for a hire request.
+  * **`/api/hirerequest/progress/<id>/update/`**: Advance job to next step (employer only).
+  * **`/api/hirerequest/progress/<id>/verify-otp/`**: Verify customer OTP on employer arrival.
+  * **`/api/hirerequest/progress/<id>/submit-payment/`**: Submit payment and complete the job.
 * **`/api/messages/`**: Direct chat delivery and history lists.
 * **`/api/notifications/`**: Real-time notifications for customer and employer dashboards.
 * **`/api/passwordreset/`**: Password reset OTP delivery and verification.
@@ -299,11 +320,13 @@ erDiagram
     EMPLOYER ||--o{ HIRE_REQUEST : "receives"
     EMPLOYER ||--|| EMPLOYER_VERIFICATION : "has"
     HIRE_REQUEST ||--o{ CHAT_MESSAGE : "owns"
+    HIRE_REQUEST ||--|| JOB_PROGRESS : "tracks"
 ```
 
-* **Main Models**: `Customer`, `Employer`, `EmployerVerification`, `HireRequest`, `ChatMessage`, `Notification`, and `EmailOTP`.
+* **Main Models**: `Customer`, `Employer`, `EmployerVerification`, `HireRequest`, `JobProgress`, `ChatMessage`, `Notification`, and `EmailOTP`.
 * **Relationships**:
   * **Employer Verification**: One-to-One relationship linking the `Employer` profile with their `EmployerVerification` files.
+  * **Job Progress**: One-to-One relationship linking `HireRequest` with a `JobProgress` stepper containing OTP, timestamps, and payment tracking.
   * **Chat Message**: One-to-Many cascading relationship linking `HireRequest` records with `ChatMessage` logs.
   * **Hire Requests**: Non-relational link matching `customer_email` and `employer_email` values.
 
@@ -319,9 +342,16 @@ erDiagram
    `Authorization: Bearer <access_token>`
 
 ### User Role Permissions
-* **Customer**: Can search verified employers, send hire requests, and read customer notifications.
-* **Employer**: Can modify rates, upload verification files, and accept/reject bookings.
+* **Customer**: Can search verified employers, send hire requests, view job progress, provide arrival OTP, chat with employers, and read customer notifications.
+* **Employer**: Can modify rates, upload verification files, accept/reject bookings, advance job progress steps (verify OTP, complete work, submit payment), chat with customers, and read employer notifications.
 * **Admin**: Can view verifications, verify/reject employers, delete customers, and view server statistics.
+
+### Object-Level Authorization (BOLA Protection)
+Beyond role checks, the backend enforces ownership validation on every protected endpoint:
+* **`IsProfileOwner`**: Ensures users can only access their own profile data.
+* **`IsHireRequestEmployer`**: Ensures only the assigned employer can modify a hire request.
+* **`IsConversationParticipant`**: Ensures only the customer or employer of a hire request can view/send messages.
+* **`IsMessageSenderAndParticipant`**: Validates that the sender email in chat payloads matches the authenticated user.
 
 ---
 
@@ -399,10 +429,11 @@ This project is licensed under the MIT License. See [LICENSE](file:///d:/Downloa
 
 ## Future Roadmap
 
-* **Centralized Auth State**: Manage session states using React Context instead of raw `localStorage` lookups.
-* **Backend Security**: Enforce JWT authentication across all views, and restrict admin actions using `IsAdminUser` permissions.
+* **Centralized Auth State**: Manage session states using React Context or `sessionStorage` instead of raw `localStorage` lookups to prevent cross-tab session collisions.
+* **Feedback & Rating System**: Merge the fully implemented review system (commit `43ac16e`) for mutual customer/employer ratings after job completion.
 * **Relational Integrity**: Refactor the database schema to replace raw email strings with strict foreign key relationships.
 * **Automated Testing**: Implement automated test suites using Vitest (frontend) and Django testing rules (backend).
+* **Real-Time Updates**: Add WebSocket support for live job progress synchronization and instant chat delivery.
 
 ---
 

@@ -26,7 +26,7 @@ DATABASES = {
 
 ## 2. Table Schemas & Models
 
-The database contains 7 main tables:
+The database contains 8 main tables:
 
 ### 2.1 Table: `customer_customer`
 Stores account and credentials of service seekers.
@@ -89,6 +89,22 @@ Stores service booking requests.
   * `message`: TextField (Blank allowed).
   * `status`: VarChar(20) (Default: `"pending"`).
   * `created_at`: DateTime (Auto-add).
+
+### 2.5 Table: `hire_request_jobprogress`
+Tracks the job lifecycle stepper progress for accepted hire requests.
+* **Fields**:
+  * `id`: BigInt (Primary Key, Auto-increment).
+  * `hire_request_id`: BigInt (One-To-One Foreign Key referencing `hire_request_hirerequest`, Cascades on delete).
+  * `step`: Integer (Default: `1`). Values: 1 = Work Accepted, 2 = Location Arrived, 3 = Work Completed, 4 = Payment Completed.
+  * `accepted_at`: DateTime (Auto-add).
+  * `arrived_at`: DateTime (Nullable).
+  * `completed_at`: DateTime (Nullable).
+  * `paid_at`: DateTime (Nullable).
+  * `otp`: VarChar(6) (Nullable). 6-digit code for location arrival verification.
+  * `otp_status`: VarChar(20) (Choices: `"generated"`, `"verified"`, `"expired"`, Default: `"generated"`).
+  * `payment_amount`: Integer (Default: `0`).
+  * `payment_status`: VarChar(20) (Choices: `"pending"`, `"paid"`, Default: `"pending"`).
+  * `payment_method`: VarChar(50) (Default: `"Online"`).
 
 ### 2.5 Table: `messaging_chatmessage`
 Stores messages between matched users.

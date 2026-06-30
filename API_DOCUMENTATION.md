@@ -279,7 +279,7 @@ This document describes all API endpoints exposed by the Blue Connect backend se
 ### 5.1 Create Hire Request
 * **Route**: `/hirerequest/create/`
 * **Method**: `POST`
-* **Authentication**: None
+* **Authentication**: JWT Token Required (`IsCustomerUser`)
 * **Request Body**:
   ```json
   {
@@ -295,9 +295,14 @@ This document describes all API endpoints exposed by the Blue Connect backend se
     "message": "Hire request sent successfully",
     "data": {
       "id": 5,
+      "employer_name": "Jane ServiceProvider",
+      "customer_name": "John Doe",
       "customer_email": "customer@example.com",
       "employer_email": "employer@example.com",
-      "status": "pending"
+      "job_role": "plumber",
+      "message": "Need leak fixed in kitchen.",
+      "status": "pending",
+      "created_at": "2026-06-30T16:40:55Z"
     }
   }
   ```
@@ -305,7 +310,7 @@ This document describes all API endpoints exposed by the Blue Connect backend se
 ### 5.2 Update Request Status
 * **Route**: `/hirerequest/update/<request_id>/`
 * **Method**: `PUT`
-* **Authentication**: None
+* **Authentication**: JWT Token Required (`IsHireRequestEmployerOrAdmin`)
 * **Request Body**:
   ```json
   {
@@ -318,19 +323,116 @@ This document describes all API endpoints exposed by the Blue Connect backend se
     "message": "Request accepted successfully",
     "data": {
       "id": 5,
+      "employer_name": "Jane ServiceProvider",
+      "customer_name": "John Doe",
       "status": "accepted"
     }
   }
   ```
 
+### 5.3 Get Employer Stats
+* **Route**: `/hirerequest/stats/`
+* **Method**: `GET`
+* **Parameters**: `?email=employer@example.com`
+* **Authentication**: JWT Token Required (`IsProfileOwnerOrAdmin`)
+* **Success Response (`200 OK`)**:
+  ```json
+  {
+    "total_jobs": 10,
+    "completed_jobs": 4,
+    "pending_requests": 3,
+    "accepted_requests": 2,
+    "rejected_requests": 1
+  }
+  ```
+
 ---
 
-## 6. Messaging Module (`/api/messages/`)
+## 6. Job Progress Module (`/api/hirerequest/progress/`)
 
-### 6.1 Send Message
+### 6.1 Get Job Progress
+* **Route**: `/hirerequest/progress/<hire_request_id>/`
+* **Method**: `GET`
+* **Authentication**: JWT Token Required (`IsConversationParticipant`)
+* **Success Response (`200 OK`)**:
+  ```json
+  {
+    "id": 1,
+    "hire_request": 5,
+    "step": 2,
+    "accepted_at": "2026-06-30T10:00:00Z",
+    "arrived_at": "2026-06-30T11:30:00Z",
+    "completed_at": null,
+    "paid_at": null,
+    "otp": "774773",
+    "otp_status": "verified",
+    "payment_amount": 0,
+    "payment_status": "pending",
+    "payment_method": "Online"
+  }
+  ```
+
+### 6.2 Update Job Progress (Complete Work)
+* **Route**: `/hirerequest/progress/<request_id>/update/`
+* **Method**: `POST`
+* **Authentication**: JWT Token Required (`IsHireRequestEmployerOrAdmin`)
+* **Request Body**:
+  ```json
+  {
+    "step": 3
+  }
+  ```
+* **Success Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Work marked as completed",
+    "data": { "step": 3, "completed_at": "2026-06-30T12:00:00Z" }
+  }
+  ```
+
+### 6.3 Verify OTP (Location Arrived)
+* **Route**: `/hirerequest/progress/<request_id>/verify-otp/`
+* **Method**: `POST`
+* **Authentication**: JWT Token Required (`IsHireRequestEmployerOrAdmin`)
+* **Request Body**:
+  ```json
+  {
+    "otp": "774773"
+  }
+  ```
+* **Success Response (`200 OK`)**:
+  ```json
+  {
+    "message": "OTP verified successfully. Location arrival confirmed."
+  }
+  ```
+
+### 6.4 Submit Payment
+* **Route**: `/hirerequest/progress/<request_id>/submit-payment/`
+* **Method**: `POST`
+* **Authentication**: JWT Token Required (`IsHireRequestEmployerOrAdmin`)
+* **Request Body**:
+  ```json
+  {
+    "payment_amount": 500,
+    "payment_method": "Cash"
+  }
+  ```
+* **Success Response (`200 OK`)**:
+  ```json
+  {
+    "message": "Payment submitted successfully. Job completed."
+  }
+  ```
+
+---
+
+## 7. Messaging Module (`/api/messages/`)
+
+### 7.1 Send Message
 * **Route**: `/messages/send/`
 * **Method**: `POST`
-* **Authentication**: None
+* **Authentication**: JWT Token Required (`IsMessageSenderAndParticipant`)
 * **Request Body**:
   ```json
   {
@@ -352,10 +454,10 @@ This document describes all API endpoints exposed by the Blue Connect backend se
   }
   ```
 
-### 6.2 Fetch Conversation History
+### 7.2 Fetch Conversation History
 * **Route**: `/messages/conversation/<hire_request_id>/`
 * **Method**: `GET`
-* **Authentication**: None
+* **Authentication**: JWT Token Required (`IsConversationParticipant`)
 * **Success Response (`200 OK`)**:
   ```json
   {
@@ -374,12 +476,12 @@ This document describes all API endpoints exposed by the Blue Connect backend se
 
 ---
 
-## 7. Notifications Module (`/api/notifications/`)
+## 8. Notifications Module (`/api/notifications/`)
 
-### 7.1 Fetch Customer Notifications
+### 8.1 Fetch Customer Notifications
 * **Route**: `/notifications/customer/`
 * **Method**: `GET`
-* **Authentication**: JWT Token Required
+* **Authentication**: JWT Token Required (`IsCustomerUser`)
 * **Success Response (`200 OK`)**:
   ```json
   [
@@ -387,6 +489,22 @@ This document describes all API endpoints exposed by the Blue Connect backend se
       "id": 1,
       "title": "Hire Request Accepted",
       "message": "Your request has been approved.",
+      "is_read": false
+    }
+  ]
+  ```
+
+### 8.2 Fetch Employer Notifications
+* **Route**: `/notifications/employee/`
+* **Method**: `GET`
+* **Authentication**: JWT Token Required (`IsEmployerUser`)
+* **Success Response (`200 OK`)**:
+  ```json
+  [
+    {
+      "id": 5,
+      "title": "New Hire Request",
+      "message": "You have a new hire request from John Doe.",
       "is_read": false
     }
   ]

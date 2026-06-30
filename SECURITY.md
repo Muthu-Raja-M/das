@@ -26,7 +26,7 @@ Blue Connect uses token-based authentication via **JSON Web Tokens (JWT)**.
   ```
 
 ### Custom Authentication Handler (`CustomJWTAuthentication`)
-To bridge JWT payloads with custom models, the backend defines `CustomJWTAuthentication` in `apps/notifications/auth.py`. 
+To bridge JWT payloads with custom models, the backend defines `CustomJWTAuthentication` in `common/permissions/auth.py`.
 It intercepts incoming requests, decodes the token, and resolves the identity using the payload's `role` claim:
 * If `role == "customer"`: Fetches account from `Customer` model.
 * If `role == "employer"`: Fetches account from `Employer` model.
@@ -36,7 +36,11 @@ It intercepts incoming requests, decodes the token, and resolves the identity us
 
 ## 2. Role-Based Access Control (RBAC)
 
-The system restricts routes and features based on the logged-in user's role:
+The system restricts routes and features based on the logged-in user's role.
+Role guards are defined in `common/permissions/roles.py`:
+* `IsCustomerUser`: Allows access only to users with `role == "customer"`.
+* `IsEmployerUser`: Allows access only to users with `role == "employer"`.
+* `IsAdminUser`: Allows access only to users with `role == "admin"`.
 
 | Module / Endpoint | Allowed Customer | Allowed Employer | Allowed Admin |
 | :--- | :---: | :---: | :---: |
@@ -45,6 +49,23 @@ The system restricts routes and features based on the logged-in user's role:
 | View upload documents (`/verification/admin/employer/<id>/`) | No | No | **Yes** |
 | Approve/Reject worker verification | No | No | **Yes** |
 | Delete Customer profiles | No | No | **Yes** |
+| Accept/Reject hire requests | No | **Yes** | **Yes** |
+| View job progress | **Yes** | **Yes** | **Yes** |
+| Update job progress steps | No | **Yes** | **Yes** |
+
+---
+
+## 2.1 Object-Level Authorization (BOLA Protection)
+
+Beyond role checks, the backend enforces fine-grained ownership validation on every protected endpoint.
+These permission classes are defined in `common/permissions/ownership.py`:
+
+* **`IsProfileOwner`**: Ensures the `email` query parameter matches the authenticated user's email.
+* **`IsProfileOwnerOrAdmin`**: Same as above, but also allows admin users.
+* **`IsHireRequestEmployer`**: Checks that the authenticated employer is the one assigned to the specific hire request.
+* **`IsHireRequestEmployerOrAdmin`**: Same as above, but also allows admin users.
+* **`IsConversationParticipant`**: Verifies the authenticated user is either the customer or employer on the hire request before allowing message access.
+* **`IsMessageSenderAndParticipant`**: Validates that the `sender_email` in chat payloads matches the authenticated user AND the user is a participant in the hire request.
 
 ---
 
