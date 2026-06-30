@@ -1365,7 +1365,7 @@ const districts = React.useMemo(() => {
                     }}
                     hireRequestId={selectedProgressJob.id}
                     role="customer"
-                    otherPartyName={selectedProgressJob.employer_email || "Employer"}
+                    otherPartyName={selectedProgressJob.employer_name || selectedProgressJob.employer_email || "Employer"}
                     jobRole={selectedProgressJob.job_role}
                     requestDate={selectedProgressJob.created_at}
                     currentRequestStatus={selectedProgressJob.status}
