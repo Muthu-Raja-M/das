@@ -36,7 +36,6 @@ import { getEmployeeNotifications } from "../../notifications/services/notificat
 import JobProgressDialog from "../../hire-request/components/JobProgressDialog";
 import ReviewDialog from "../../hire-request/components/ReviewDialog";
 import EmployerReviews from "../components/EmployerReviews";
-import API from "../../../api/axios";
 
 import { useEmployerProfile } from "../hooks/useEmployer";
 import { useHireRequests } from "../../hire-request/hooks/useHireRequest";
