@@ -14,8 +14,7 @@ urlpatterns = [
     path("api/passwordreset/", include("apps.password_reset.urls")), 
     path("api/messages/", include("apps.messaging.urls")),
     path("api/adminpanel/", include("apps.adminpanel.urls")),
-    path("api/notifications/", include("apps.notifications.urls")),
-    path("api/reviews/", include("apps.reviews.urls"))
+    path("api/notifications/", include("apps.notifications.urls"))
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

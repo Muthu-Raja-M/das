@@ -243,26 +243,6 @@ def verify_employer(request, id):
     )
 
 
-def get_employer_stats_data(employer, request):
-    from apps.reviews.models import JobReview
-    from django.db.models import Avg
-    from apps.hire_request.models import HireRequest
-
-    completed_jobs_count = HireRequest.objects.filter(
-        employer_email=employer.email,
-        status__in=["completed", "fully_reviewed"]
-    ).count()
-    reviews = JobReview.objects.filter(receiver_role="employer", receiver_id=employer.id)
-    total_reviews = reviews.count()
-    average_rating = reviews.aggregate(avg=Avg("overall_rating"))["avg"] or 0.0
-
-    response_data = EmployerSerializer(employer, context={"request": request}).data
-    response_data["completed_jobs_count"] = completed_jobs_count
-    response_data["total_reviews"] = total_reviews
-    response_data["average_rating"] = round(average_rating, 1)
-    return response_data
-
-
 @api_view(["GET"])
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated, IsProfileOwnerOrAdmin])
@@ -277,8 +257,8 @@ def get_employer_profile(request):
 
     try:
         employer = Employer.objects.get(email=email)
-        response_data = get_employer_stats_data(employer, request)
-        return Response(response_data, status=status.HTTP_200_OK)
+        serializer = EmployerSerializer(employer, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     except Employer.DoesNotExist:
         return Response(
@@ -291,8 +271,8 @@ def get_employer_profile(request):
 def get_employer_detail(request, employer_id):
     try:
         employer = Employer.objects.get(id=employer_id)
-        response_data = get_employer_stats_data(employer, request)
-        return Response(response_data, status=status.HTTP_200_OK)
+        serializer = EmployerSerializer(employer, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
     except Employer.DoesNotExist:
         return Response(
             {"error": "Worker not found"},

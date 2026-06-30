@@ -21,7 +21,6 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import PersonIcon from "@mui/icons-material/Person";
 import ConstructionIcon from "@mui/icons-material/Construction";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import StarRateIcon from "@mui/icons-material/StarRate";
 
 // --- Color Palette ---
 const COLORS = {
@@ -96,8 +95,6 @@ export default function EmployerStatsCards({
     acceptedRequests = 0,
     recentRequests = [],
     isLoading = false,
-    averageRating = 0,
-    totalReviews = 0,
 }) {
     const stats = [
         {
@@ -135,15 +132,6 @@ export default function EmployerStatsCards({
             color: COLORS.purple.main,
             trend: "+4% vs last week",
             trendType: "up",
-        },
-        {
-            title: "Average Rating",
-            value: totalReviews > 0 ? `${averageRating.toFixed(1)} ★` : "N/A",
-            icon: <StarRateIcon sx={{ fontSize: 24 }} />,
-            bg: COLORS.primary.light,
-            color: "#1C6EA4",
-            trend: `${totalReviews} total reviews`,
-            trendType: "neutral",
         },
     ];
 
@@ -249,7 +237,7 @@ export default function EmployerStatsCards({
             {/* STATISTICS SECTION */}
             <Grid container spacing={3}>
                 {stats.map((item) => (
-                    <Grid item xs={12} sm={6} md={2.4} key={item.title}>
+                    <Grid item xs={12} sm={6} md={3} key={item.title}>
                         <Card
                             sx={{
                                 borderRadius: 4,

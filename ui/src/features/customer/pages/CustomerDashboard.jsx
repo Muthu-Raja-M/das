@@ -29,11 +29,6 @@ import {
     TableHead,
     TableRow,
     Paper,
-    Rating,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    Divider,
 } from "@mui/material";
 
 import MuiAppBar from "@mui/material/AppBar";
@@ -51,8 +46,6 @@ import HomeIcon from "@mui/icons-material/Home";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import AssignmentIcon from "@mui/icons-material/Assignment";
-import CloseIcon from "@mui/icons-material/Close";
-import ReviewDialog from "../../hire-request/components/ReviewDialog";
 import { getAllStates, getDistricts } from "india-state-district";
 
 import DriverImg from "../../../assets/driver.png";
@@ -439,11 +432,11 @@ function CustomerProfileSection() {
     );
 }
 
-function CustomerRequestsSection({ requests, loading, onOpenProgress, onViewFeedback }) {
+function CustomerRequestsSection({ requests, loading, onOpenProgress }) {
     const getStatusColor = (status) => {
         const val = String(status || "").toLowerCase();
         if (val === "accepted") return "success";
-        if (val === "completed" || val === "fully_reviewed") return "info";
+        if (val === "completed") return "info";
         if (val === "rejected") return "error";
         return "warning";
     };
@@ -527,7 +520,7 @@ function CustomerRequestsSection({ requests, loading, onOpenProgress, onViewFeed
                         const role = req.job_role || req.role || "-";
                         const dateValue = req.created_at || null;
                         const status = String(req.status || "pending").toLowerCase();
-                        const canTrackProgress = status === "accepted" || status === "completed" || status === "fully_reviewed";
+                        const canTrackProgress = status === "accepted" || status === "completed";
 
                         return (
                             <TableRow key={req.id} hover>
@@ -538,7 +531,7 @@ function CustomerRequestsSection({ requests, loading, onOpenProgress, onViewFeed
                                 <TableCell>{formatDate(dateValue)}</TableCell>
                                 <TableCell>
                                     <Chip
-                                        label={status === "fully_reviewed" ? "reviewed" : status}
+                                        label={status}
                                         color={getStatusColor(status)}
                                         size="small"
                                         sx={{
@@ -550,26 +543,14 @@ function CustomerRequestsSection({ requests, loading, onOpenProgress, onViewFeed
                                 </TableCell>
                                 <TableCell>
                                     {canTrackProgress ? (
-                                        <Stack direction="row" spacing={1}>
-                                            <Button
-                                                size="small"
-                                                variant="contained"
-                                                onClick={() => onOpenProgress?.(req)}
-                                                sx={{ textTransform: "none", fontWeight: 700, backgroundColor: "#1C6EA4" }}
-                                            >
-                                                Track Progress
-                                            </Button>
-                                            {(status === "completed" || status === "fully_reviewed") && (
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    onClick={() => onViewFeedback?.(req)}
-                                                    sx={{ textTransform: "none", fontWeight: 700 }}
-                                                >
-                                                    View Feedback
-                                                </Button>
-                                            )}
-                                        </Stack>
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            onClick={() => onOpenProgress?.(req)}
+                                            sx={{ textTransform: "none", fontWeight: 700, backgroundColor: "#1C6EA4" }}
+                                        >
+                                            Track Progress
+                                        </Button>
                                     ) : (
                                         <Typography fontSize={13} color="text.secondary">
                                             Waiting for response
@@ -628,42 +609,6 @@ export default function CustomerDashboard() {
     const [progressOpen, setProgressOpen] = React.useState(false);
     const [selectedProgressJob, setSelectedProgressJob] = React.useState(null);
 
-    const [reviewDialogOpen, setReviewDialogOpen] = React.useState(false);
-    const [selectedReviewJob, setSelectedReviewJob] = React.useState(null);
-    const [feedbackOpen, setFeedbackOpen] = React.useState(false);
-    const [selectedFeedbackJob, setSelectedFeedbackJob] = React.useState(null);
-    const [jobReviews, setJobReviews] = React.useState(null);
-    const [customerProfileStats, setCustomerProfileStats] = React.useState(null);
-
-    const showSnackbar = (msg, severity = "success") => {
-        setSnackbarMessage(msg);
-        setSnackbarSeverity(severity);
-        setSnackbarOpen(true);
-    };
-
-    const fetchCustomerProfileStats = React.useCallback(async () => {
-        const email = localStorage.getItem("email");
-        if (!email) return;
-        try {
-            const data = await API.get(`/customer/profile/?email=${email}`);
-            setCustomerProfileStats(data);
-        } catch (error) {
-            console.error("Error loading customer profile stats:", error);
-        }
-    }, []);
-
-    const handleViewFeedback = async (job) => {
-        setSelectedFeedbackJob(job);
-        try {
-            const response = await API.get(`/reviews/job/${job.id}/`);
-            setJobReviews(response);
-            setFeedbackOpen(true);
-        } catch (error) {
-            console.error("Error loading feedback details:", error);
-            showSnackbar("Failed to load feedback details", "error");
-        }
-    };
-
     const fetchCustomerRequests = React.useCallback(async () => {
         const email = localStorage.getItem("email");
         if (!email) return;
@@ -672,15 +617,6 @@ export default function CustomerDashboard() {
             const data = await API.get(`/hirerequest/customer/?email=${email}`);
             setCustomerRequests(Array.isArray(data) ? data : []);
             setHireCount(Array.isArray(data) ? data.length : 0);
-
-            // Scan for completed jobs without review
-            const unreviewedJob = Array.isArray(data) ? data.find(
-                (req) => req.status === "completed" && req.progress && !req.progress.customer_review_submitted
-            ) : null;
-            if (unreviewedJob) {
-                setSelectedReviewJob(unreviewedJob);
-                setReviewDialogOpen(true);
-            }
         } catch (error) {
             console.error("Error loading customer requests:", error);
         } finally {
@@ -689,11 +625,7 @@ export default function CustomerDashboard() {
     }, []);
 
     React.useEffect(() => {
-        fetchCustomerProfileStats();
-    }, [fetchCustomerProfileStats]);
-
-    React.useEffect(() => {
-        if (activeMenu === "My Orders" || activeMenu === "Home") {
+        if (activeMenu === "My Orders") {
             fetchCustomerRequests();
         }
     }, [activeMenu, fetchCustomerRequests]);
@@ -894,62 +826,6 @@ const districts = React.useMemo(() => {
                     ))}
                 </Box>
             </Box>
-
-            {/* Customer Reputation Stats Cards */}
-            {customerProfileStats && (
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                    <Grid item xs={12} sm={4}>
-                        <Card sx={{ borderRadius: 3, border: `1px solid ${COLORS.border}`, boxShadow: "none" }}>
-                            <CardContent sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
-                                <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: COLORS.primaryBg, color: COLORS.primary }}>
-                                    <StarIcon sx={{ fontSize: 24 }} />
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary" fontWeight={700} display="block">Customer Rating</Typography>
-                                    <Stack direction="row" spacing={0.8} alignItems="center">
-                                        <Typography variant="h6" fontWeight={800} sx={{ fontSize: "1.1rem" }}>
-                                            {customerProfileStats.average_rating > 0 ? `${customerProfileStats.average_rating.toFixed(1)} ★` : "N/A"}
-                                        </Typography>
-                                        {customerProfileStats.average_rating > 0 && (
-                                            <Rating value={customerProfileStats.average_rating} readOnly size="small" precision={0.1} />
-                                        )}
-                                    </Stack>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Card sx={{ borderRadius: 3, border: `1px solid ${COLORS.border}`, boxShadow: "none" }}>
-                            <CardContent sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
-                                <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#ecfdf5", color: "#10b981" }}>
-                                    <AssignmentIcon sx={{ fontSize: 24 }} />
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary" fontWeight={700} display="block">Total Reviews</Typography>
-                                    <Typography variant="h6" fontWeight={800} sx={{ fontSize: "1.1rem" }}>
-                                        {customerProfileStats.total_reviews}
-                                    </Typography>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Card sx={{ borderRadius: 3, border: `1px solid ${COLORS.border}`, boxShadow: "none" }}>
-                            <CardContent sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
-                                <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#f5f3ff", color: "#8b5cf6" }}>
-                                    <CheckCircleIcon sx={{ fontSize: 24 }} />
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary" fontWeight={700} display="block">Completed Jobs</Typography>
-                                    <Typography variant="h6" fontWeight={800} sx={{ fontSize: "1.1rem" }}>
-                                        {customerProfileStats.completed_jobs_count}
-                                    </Typography>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                </Grid>
-            )}
 
             {/* ── Step 1: Worker category grid ── */}
             <Typography
@@ -1457,7 +1333,6 @@ const districts = React.useMemo(() => {
                         requests={customerRequests}
                         loading={requestsLoading}
                         onOpenProgress={handleOpenProgressFromJob}
-                        onViewFeedback={handleViewFeedback}
                     />
                 )}
                 {activeMenu === "Notifications" && (
@@ -1496,124 +1371,6 @@ const districts = React.useMemo(() => {
                     currentRequestStatus={selectedProgressJob.status}
                 />
             )}
-
-            {selectedReviewJob && (
-                <ReviewDialog
-                    open={reviewDialogOpen}
-                    onClose={() => {
-                        setReviewDialogOpen(false);
-                        setSelectedReviewJob(null);
-                    }}
-                    hireRequestId={selectedReviewJob.id}
-                    role="customer"
-                    otherPartyName={selectedReviewJob.employer_name || selectedReviewJob.employer_email || "Employer"}
-                    onSubmitSuccess={() => {
-                        showSnackbar("Review submitted successfully!", "success");
-                        fetchCustomerRequests();
-                        fetchCustomerProfileStats();
-                    }}
-                />
-            )}
-
-            {/* View Feedback Dialog */}
-            <Dialog
-                open={feedbackOpen}
-                onClose={() => {
-                    setFeedbackOpen(false);
-                    setJobReviews(null);
-                    setSelectedFeedbackJob(null);
-                }}
-                fullWidth
-                maxWidth="sm"
-                PaperProps={{ sx: { borderRadius: 4 } }}
-            >
-                <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#1C6EA4", color: "#fff", p: 2 }}>
-                    <Typography variant="h6" fontWeight={700}>Job Feedback & Reviews</Typography>
-                    <IconButton onClick={() => setFeedbackOpen(false)} sx={{ color: "#fff" }} size="small">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ p: 3, backgroundColor: "#f8fafc" }}>
-                    <Stack spacing={3}>
-                        <Box>
-                            <Typography variant="subtitle2" fontWeight={700} color="text.secondary" gutterBottom>
-                                CUSTOMER REVIEW OF EMPLOYER
-                            </Typography>
-                            {jobReviews?.customer_review ? (
-                                <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: "#fff", border: "1px solid #e2e8f0" }}>
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                                        <Rating value={jobReviews.customer_review.overall_rating} readOnly size="small" />
-                                        <Typography variant="body2" fontWeight={700}>
-                                            {jobReviews.customer_review.overall_rating} / 5
-                                        </Typography>
-                                    </Stack>
-                                    {jobReviews.customer_review.review_comment ? (
-                                        <Typography variant="body2" sx={{ fontStyle: "italic" }}>
-                                            "{jobReviews.customer_review.review_comment}"
-                                        </Typography>
-                                    ) : (
-                                        <Typography variant="body2" color="text.secondary">No comment left.</Typography>
-                                    )}
-                                    <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} flexWrap="wrap">
-                                        <Typography variant="caption" color="text.secondary">
-                                            Work Quality: {jobReviews.customer_review.work_quality || "-"}★
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Communication: {jobReviews.customer_review.communication || "-"}★
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Professionalism: {jobReviews.customer_review.professionalism || "-"}★
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Behaviour: {jobReviews.customer_review.behaviour || "-"}★
-                                        </Typography>
-                                    </Stack>
-                                </Box>
-                            ) : (
-                                <Typography variant="body2" color="text.secondary">Pending customer submission.</Typography>
-                            )}
-                        </Box>
-
-                        <Divider />
-
-                        <Box>
-                            <Typography variant="subtitle2" fontWeight={700} color="text.secondary" gutterBottom>
-                                EMPLOYER REVIEW OF CUSTOMER
-                            </Typography>
-                            {jobReviews?.employer_review ? (
-                                <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: "#fff", border: "1px solid #e2e8f0" }}>
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                                        <Rating value={jobReviews.employer_review.overall_rating} readOnly size="small" />
-                                        <Typography variant="body2" fontWeight={700}>
-                                            {jobReviews.employer_review.overall_rating} / 5
-                                        </Typography>
-                                    </Stack>
-                                    {jobReviews.employer_review.review_comment ? (
-                                        <Typography variant="body2" sx={{ fontStyle: "italic" }}>
-                                            "{jobReviews.employer_review.review_comment}"
-                                        </Typography>
-                                    ) : (
-                                        <Typography variant="body2" color="text.secondary">No comment left.</Typography>
-                                    )}
-                                    <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} flexWrap="wrap">
-                                        <Typography variant="caption" color="text.secondary">
-                                            Communication: {jobReviews.employer_review.communication || "-"}★
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Behaviour: {jobReviews.employer_review.behaviour || "-"}★
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Payment: {jobReviews.employer_review.payment_experience || "-"}★
-                                        </Typography>
-                                    </Stack>
-                                </Box>
-                            ) : (
-                                <Typography variant="body2" color="text.secondary">Pending employer submission.</Typography>
-                            )}
-                        </Box>
-                    </Stack>
-                </DialogContent>
-            </Dialog>
         </Box>
     );
 }
