@@ -1,7 +1,9 @@
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
+# pyrefly: ignore [missing-import]
+from exporter.prometheus import PrometheusMetricReader
+# pyrefly: ignore [missing-import]
 from prometheus_client import start_http_server
 
 # 1. Start Prometheus endpoint (this exposes metrics)

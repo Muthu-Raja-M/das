@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from apps.customer.models import Customer
-from apps.employer.models import Employer
+from ..customer.models import Customer
+from ..employer.models import Employer
 
 
 class CustomerVerificationSerializer(serializers.ModelSerializer):

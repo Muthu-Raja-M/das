@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Customer
 from .serializers import CustomerSerializer
+# pyrefly: ignore [missing-import]
 from apps.employer.models import Employer
 
 

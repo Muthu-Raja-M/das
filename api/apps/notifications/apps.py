@@ -6,6 +6,7 @@ class NotificationsConfig(AppConfig):
 
     def ready(self):
         try:
+            # pyrefly: ignore [missing-import]
             import apps.notifications.signals
         except ImportError:
             pass

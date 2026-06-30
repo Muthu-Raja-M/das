@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import ChatMessage
 from .serializers import ChatMessageSerializer
-from apps.hire_request.models import HireRequest
+from ..hire_request.models import HireRequest
 
 
 @api_view(["POST"])

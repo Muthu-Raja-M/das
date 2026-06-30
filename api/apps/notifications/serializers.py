@@ -4,6 +4,7 @@ from apps.hire_request.models import HireRequest
 from apps.customer.models import Customer
 from apps.employer.models import Employer
 
+
 class NotificationSerializer(serializers.ModelSerializer):
     hire_request_status = serializers.SerializerMethodField()
     sender_name = serializers.SerializerMethodField()
