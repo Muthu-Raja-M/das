@@ -73,11 +73,25 @@ def get_customer_profile(request):
 
     try:
         customer = Customer.objects.get(email=email)
+        
+        # Get completed jobs count and review stats
+        from apps.reviews.models import JobReview
+        from django.db.models import Avg
+        from apps.hire_request.models import HireRequest
+        
+        completed_jobs_count = HireRequest.objects.filter(customer_email=email, status__in=["completed", "fully_reviewed"]).count()
+        reviews = JobReview.objects.filter(receiver_role="customer", receiver_id=customer.id)
+        total_reviews = reviews.count()
+        average_rating = reviews.aggregate(avg=Avg("overall_rating"))["avg"] or 0.0
+        
+        response_data = CustomerSerializer(customer).data
+        response_data["completed_jobs_count"] = completed_jobs_count
+        response_data["total_reviews"] = total_reviews
+        response_data["average_rating"] = round(average_rating, 1)
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     except Customer.DoesNotExist:
         return Response(
             {"error": "Customer not found"},
             status=status.HTTP_404_NOT_FOUND
         )
-
-    serializer = CustomerSerializer(customer)
-    return Response(serializer.data, status=status.HTTP_200_OK)

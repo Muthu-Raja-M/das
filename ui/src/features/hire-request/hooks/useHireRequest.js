@@ -97,6 +97,7 @@ export const useHireRequests = () => {
             message: item?.message || "No message from customer",
             status: String(item?.status || "pending").toLowerCase(),
             createdAt: item?.created_at || "",
+            progress: item?.progress || null,
         }));
     }, [hireRequests]);
 

@@ -19,6 +19,7 @@ const getStatusColor = (status) => {
 
     if (value === "accepted") return "success";
     if (value === "rejected") return "error";
+    if (value === "completed" || value === "fully_reviewed") return "info";
     return "warning";
 };
 
@@ -41,6 +42,7 @@ export default function MyJobsSection({
     updatingRequestId,
     onOpenMessage,
     onOpenProgress,
+    onViewFeedback,
 }) {
     if (!jobs.length) {
         return (
@@ -130,7 +132,7 @@ export default function MyJobsSection({
 
                                 <TableCell>
                                     <Chip
-                                        label={status}
+                                        label={status === "fully_reviewed" ? "reviewed" : status}
                                         color={getStatusColor(status)}
                                         size="small"
                                         sx={{
@@ -185,6 +187,15 @@ export default function MyJobsSection({
                                                 Track Progress
                                             </Button>
                                         </Stack>
+                                    ) : status === "completed" || status === "fully_reviewed" ? (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => onViewFeedback?.(job)}
+                                            sx={{ textTransform: "none", fontWeight: 700 }}
+                                        >
+                                            View Feedback
+                                        </Button>
                                     ) : (
                                         <Typography fontSize={13} color="text.secondary">
                                             No action

@@ -8,6 +8,12 @@ import {
     Alert,
     Avatar,
     Button,
+    IconButton,
+    Rating,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    Divider,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +22,8 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import WorkIcon from "@mui/icons-material/Work";
 import EmailIcon from "@mui/icons-material/Email";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import CloseIcon from "@mui/icons-material/Close";
+import StarRateIcon from "@mui/icons-material/StarRate";
 
 import Drawer from "../../../shared/components/Drawer";
 import EmployerStatsCards from "../components/EmployerStatsCards";
@@ -26,6 +34,8 @@ import EmployeeNotificationPanel from "../../notifications/components/EmployeeNo
 import NotificationBellDropdown from "../../notifications/components/NotificationBellDropdown";
 import { getEmployeeNotifications } from "../../notifications/services/notificationService";
 import JobProgressDialog from "../../hire-request/components/JobProgressDialog";
+import ReviewDialog from "../../hire-request/components/ReviewDialog";
+import EmployerReviews from "../components/EmployerReviews";
 
 import { useEmployerProfile } from "../hooks/useEmployer";
 import { useHireRequests } from "../../hire-request/hooks/useHireRequest";
@@ -52,7 +62,7 @@ function EmployerDashboard() {
     const navigate = useNavigate();
 
     const email = localStorage.getItem("email") || "";
-    const { data: profileData } = useEmployerProfile(email);
+    const { data: profileData, refetch: refetchProfile } = useEmployerProfile(email);
 
     // ✅ Get raw backend status
     const backendStatus = profileData?.verification_status || "not_submitted";
@@ -152,7 +162,26 @@ function EmployerDashboard() {
         filteredRequests = [],
         updatingRequestId,
         onUpdateStatus: updateRequestStatus,
+        reloadRequests,
     } = useHireRequests(email);
+
+    const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+    const [selectedReviewJob, setSelectedReviewJob] = useState(null);
+
+    useEffect(() => {
+        if (hireRequests.length > 0) {
+            const unreviewedJob = hireRequests.find(
+                (req) =>
+                    String(req.status).toLowerCase() === "completed" &&
+                    req.progress &&
+                    !req.progress.employer_review_submitted
+            );
+            if (unreviewedJob) {
+                setSelectedReviewJob(unreviewedJob);
+                setReviewDialogOpen(true);
+            }
+        }
+    }, [hireRequests]);
 
     const showSnack = (msg, severity = "success") => {
         setSnackMsg(msg);
@@ -177,7 +206,7 @@ function EmployerDashboard() {
     const totalJobsCount = hireRequests.length;
 
     const completedJobsCount = hireRequests.filter(
-        (item) => String(item.status || "").toLowerCase() === "completed"
+        (item) => String(item.status || "").toLowerCase() === "completed" || String(item.status || "").toLowerCase() === "fully_reviewed"
     ).length;
 
     const pendingRequestsCount = hireRequests.filter(
@@ -191,6 +220,7 @@ function EmployerDashboard() {
     const navItems = [
         { text: "Dashboard", icon: <DashboardIcon /> },
         { text: "My Jobs", icon: <WorkIcon />, badge: pendingRequestsCount },
+        { text: "Reviews", icon: <StarRateIcon /> },
         { text: "Messages", icon: <EmailIcon /> },
         { text: "Notifications", icon: <NotificationsIcon />, badge: unreadNotificationsCount },
     ];
@@ -207,6 +237,23 @@ function EmployerDashboard() {
 
     const [progressOpen, setProgressOpen] = useState(false);
     const [selectedProgressJob, setSelectedProgressJob] = useState(null);
+
+    const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const [selectedFeedbackJob, setSelectedFeedbackJob] = useState(null);
+    const [jobReviews, setJobReviews] = useState(null);
+
+    const handleViewFeedback = async (job) => {
+        setSelectedFeedbackJob(job);
+        try {
+            // Import/Reference API client
+            const response = await API.get(`/reviews/job/${job.id}/`);
+            setJobReviews(response);
+            setFeedbackOpen(true);
+        } catch (error) {
+            console.error("Error loading feedback details:", error);
+            showSnack("Failed to load feedback details", "error");
+        }
+    };
 
     const handleOpenProgressFromJob = (job) => {
         setSelectedProgressJob(job);
@@ -359,6 +406,8 @@ function EmployerDashboard() {
                         pendingRequests={pendingRequestsCount}
                         acceptedRequests={acceptedRequestsCount}
                         recentRequests={filteredRequests}
+                        averageRating={profileData?.average_rating || 0}
+                        totalReviews={profileData?.total_reviews || 0}
                     />
                 )}
 
@@ -369,7 +418,12 @@ function EmployerDashboard() {
                         onUpdateStatus={handleRequestStatusUpdate}
                         updatingRequestId={updatingRequestId}
                         onOpenProgress={handleOpenProgressFromJob}
+                        onViewFeedback={handleViewFeedback}
                     />
+                )}
+
+                {activeMenu === "Reviews" && (
+                    <EmployerReviews employerId={profileData?.id} />
                 )}
 
                 {activeMenu === "Messages" && (
@@ -410,6 +464,124 @@ function EmployerDashboard() {
                     currentRequestStatus={selectedProgressJob.status}
                 />
             )}
+
+            {selectedReviewJob && (
+                <ReviewDialog
+                    open={reviewDialogOpen}
+                    onClose={() => {
+                        setReviewDialogOpen(false);
+                        setSelectedReviewJob(null);
+                    }}
+                    hireRequestId={selectedReviewJob.id}
+                    role="employer"
+                    otherPartyName={selectedReviewJob.customer_name || selectedReviewJob.customer_email || "Customer"}
+                    onSubmitSuccess={() => {
+                        showSnack("Review submitted successfully!", "success");
+                        reloadRequests?.();
+                        refetchProfile?.();
+                    }}
+                />
+            )}
+
+            {/* View Feedback Dialog */}
+            <Dialog
+                open={feedbackOpen}
+                onClose={() => {
+                    setFeedbackOpen(false);
+                    setJobReviews(null);
+                    setSelectedFeedbackJob(null);
+                }}
+                fullWidth
+                maxWidth="sm"
+                PaperProps={{ sx: { borderRadius: 4 } }}
+            >
+                <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#1C6EA4", color: "#fff", p: 2 }}>
+                    <Typography variant="h6" fontWeight={700}>Job Feedback & Reviews</Typography>
+                    <IconButton onClick={() => setFeedbackOpen(false)} sx={{ color: "#fff" }} size="small">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ p: 3, backgroundColor: "#f8fafc" }}>
+                    <Stack spacing={3}>
+                        <Box>
+                            <Typography variant="subtitle2" fontWeight={700} color="text.secondary" gutterBottom>
+                                CUSTOMER REVIEW OF EMPLOYER
+                            </Typography>
+                            {jobReviews?.customer_review ? (
+                                <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: "#fff", border: "1px solid #e2e8f0" }}>
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                        <Rating value={jobReviews.customer_review.overall_rating} readOnly size="small" />
+                                        <Typography variant="body2" fontWeight={700}>
+                                            {jobReviews.customer_review.overall_rating} / 5
+                                        </Typography>
+                                    </Stack>
+                                    {jobReviews.customer_review.review_comment ? (
+                                        <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                                            "{jobReviews.customer_review.review_comment}"
+                                        </Typography>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">No comment left.</Typography>
+                                    )}
+                                    <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} flexWrap="wrap">
+                                        <Typography variant="caption" color="text.secondary">
+                                            Work Quality: {jobReviews.customer_review.work_quality || "-"}★
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Communication: {jobReviews.customer_review.communication || "-"}★
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Professionalism: {jobReviews.customer_review.professionalism || "-"}★
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Behaviour: {jobReviews.customer_review.behaviour || "-"}★
+                                        </Typography>
+                                    </Stack>
+                                </Box>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary">Pending customer submission.</Typography>
+                            )}
+                        </Box>
+
+                        <Divider />
+
+                        <Box>
+                            <Typography variant="subtitle2" fontWeight={700} color="text.secondary" gutterBottom>
+                                EMPLOYER REVIEW OF CUSTOMER
+                            </Typography>
+                            {jobReviews?.employer_review ? (
+                                <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: "#fff", border: "1px solid #e2e8f0" }}>
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                        <Rating value={jobReviews.employer_review.overall_rating} readOnly size="small" />
+                                        <Typography variant="body2" fontWeight={700}>
+                                            {jobReviews.employer_review.overall_rating} / 5
+                                        </Typography>
+                                    </Stack>
+                                    {jobReviews.employer_review.review_comment ? (
+                                        <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                                            "{jobReviews.employer_review.review_comment}"
+                                        </Typography>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">No comment left.</Typography>
+                                    )}
+                                    <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} flexWrap="wrap">
+                                        <Typography variant="caption" color="text.secondary">
+                                            Communication: {jobReviews.employer_review.communication || "-"}★
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Behaviour: {jobReviews.employer_review.behaviour || "-"}★
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Payment: {jobReviews.employer_review.payment_experience || "-"}★
+                                        </Typography>
+                                    </Stack>
+                                </Box>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary">Pending employer submission.</Typography>
+                            )}
+                        </Box>
+                    </Stack>
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

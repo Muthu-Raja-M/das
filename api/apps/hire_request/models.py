@@ -55,6 +55,12 @@ class JobProgress(models.Model):
     )
     payment_method = models.CharField(max_length=50, default="Online")
 
+    # Review status tracking
+    customer_review_submitted = models.BooleanField(default=False)
+    employer_review_submitted = models.BooleanField(default=False)
+    customer_reviewed_at = models.DateTimeField(null=True, blank=True)
+    employer_reviewed_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return f"Progress for Hire Request {self.hire_request_id} - Step {self.step}"
 
