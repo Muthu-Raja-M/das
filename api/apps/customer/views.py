@@ -1,6 +1,11 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from common.permissions.auth import CustomJWTAuthentication
+from common.permissions.roles import IsAdminUser
+from common.permissions.ownership import IsProfileOwnerOrAdmin
+
 from .models import Customer
 from .serializers import CustomerSerializer
 # pyrefly: ignore [missing-import]
@@ -46,6 +51,8 @@ def create_customer(request):
 
 
 @api_view(['GET'])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def get_customers(request):
     customers = Customer.objects.all()
     serializer = CustomerSerializer(customers, many=True)
@@ -53,6 +60,8 @@ def get_customers(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsProfileOwnerOrAdmin])
 def get_customer_profile(request):
     email = request.GET.get("email", "").strip().lower()
 

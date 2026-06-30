@@ -22,6 +22,13 @@ import {
     Avatar,
     Badge,
     Tooltip,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
 } from "@mui/material";
 
 import MuiAppBar from "@mui/material/AppBar";
@@ -55,6 +62,8 @@ import CustomerProfileCard from "../components/CustomerProfileCard";
 import CustomerNotificationPanel from "../../notifications/components/CustomerNotificationPanel";
 import NotificationBellDropdown from "../../notifications/components/NotificationBellDropdown";
 import { getCustomerNotifications } from "../../notifications/services/notificationService";
+import API from "../../../api/axios";
+import JobProgressDialog from "../../hire-request/components/JobProgressDialog";
 
 const drawerWidth = 200;
 const collapsedWidth = 72;
@@ -423,18 +432,137 @@ function CustomerProfileSection() {
     );
 }
 
-function CustomerRequestsSection({ hireCount }) {
+function CustomerRequestsSection({ requests, loading, onOpenProgress }) {
+    const getStatusColor = (status) => {
+        const val = String(status || "").toLowerCase();
+        if (val === "accepted") return "success";
+        if (val === "completed") return "info";
+        if (val === "rejected") return "error";
+        return "warning";
+    };
+
+    const formatDate = (dateValue) => {
+        if (!dateValue) return "-";
+        const date = new Date(dateValue);
+        if (Number.isNaN(date.getTime())) return "-";
+        return date.toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    };
+
+    if (loading) {
+        return (
+            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (!requests.length) {
+        return (
+            <Box
+                sx={{
+                    p: 4,
+                    textAlign: "center",
+                    borderRadius: 3,
+                    backgroundColor: "#fff",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+                }}
+            >
+                <Typography variant="h6" fontWeight={700}>
+                    No hire requests found
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    When you hire workers, your request timeline and status will appear here.
+                </Typography>
+            </Box>
+        );
+    }
+
     return (
-        <Card sx={{ borderRadius: 3 }}>
-            <CardContent>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+        <TableContainer
+            component={Paper}
+            sx={{
+                borderRadius: 4,
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                overflow: "hidden",
+            }}
+        >
+            <Box sx={{ p: 2.5, backgroundColor: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="h6" fontWeight={700}>
                     My Requests
                 </Typography>
-                <Typography color="text.secondary">
-                    Total requests sent: {hireCount}
-                </Typography>
-            </CardContent>
-        </Card>
+                <Chip
+                    label={`Total Sent: ${requests.length}`}
+                    color="primary"
+                    variant="outlined"
+                    size="small"
+                    sx={{ fontWeight: 600 }}
+                />
+            </Box>
+
+            <Table>
+                <TableHead>
+                    <TableRow sx={{ backgroundColor: "#f8fafc" }}>
+                        <TableCell sx={{ fontWeight: 700 }}>Employer</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Request Date</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Action</TableCell>
+                    </TableRow>
+                </TableHead>
+
+                <TableBody>
+                    {requests.map((req) => {
+                        const employerEmail = req.employer_email || "Employer";
+                        const role = req.job_role || req.role || "-";
+                        const dateValue = req.created_at || null;
+                        const status = String(req.status || "pending").toLowerCase();
+                        const canTrackProgress = status === "accepted" || status === "completed";
+
+                        return (
+                            <TableRow key={req.id} hover>
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                    {employerEmail}
+                                </TableCell>
+                                <TableCell>{role}</TableCell>
+                                <TableCell>{formatDate(dateValue)}</TableCell>
+                                <TableCell>
+                                    <Chip
+                                        label={status}
+                                        color={getStatusColor(status)}
+                                        size="small"
+                                        sx={{
+                                            fontWeight: 600,
+                                            textTransform: "capitalize",
+                                            minWidth: 90,
+                                        }}
+                                    />
+                                </TableCell>
+                                <TableCell>
+                                    {canTrackProgress ? (
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            onClick={() => onOpenProgress?.(req)}
+                                            sx={{ textTransform: "none", fontWeight: 700, backgroundColor: "#1C6EA4" }}
+                                        >
+                                            Track Progress
+                                        </Button>
+                                    ) : (
+                                        <Typography fontSize={13} color="text.secondary">
+                                            Waiting for response
+                                        </Typography>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                </TableBody>
+            </Table>
+        </TableContainer>
     );
 }
 
@@ -475,6 +603,37 @@ export default function CustomerDashboard() {
     const [workers, setWorkers] = React.useState([]);
     const [loading, setLoading] = React.useState(false);
     const [profileOpen, setProfileOpen] = React.useState(false);
+
+    const [customerRequests, setCustomerRequests] = React.useState([]);
+    const [requestsLoading, setRequestsLoading] = React.useState(false);
+    const [progressOpen, setProgressOpen] = React.useState(false);
+    const [selectedProgressJob, setSelectedProgressJob] = React.useState(null);
+
+    const fetchCustomerRequests = React.useCallback(async () => {
+        const email = localStorage.getItem("email");
+        if (!email) return;
+        setRequestsLoading(true);
+        try {
+            const data = await API.get(`/hirerequest/customer/?email=${email}`);
+            setCustomerRequests(Array.isArray(data) ? data : []);
+            setHireCount(Array.isArray(data) ? data.length : 0);
+        } catch (error) {
+            console.error("Error loading customer requests:", error);
+        } finally {
+            setRequestsLoading(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (activeMenu === "My Orders") {
+            fetchCustomerRequests();
+        }
+    }, [activeMenu, fetchCustomerRequests]);
+
+    const handleOpenProgressFromJob = (job) => {
+        setSelectedProgressJob(job);
+        setProgressOpen(true);
+    };
 
     const workersSectionRef = React.useRef(null);
 
@@ -526,20 +685,12 @@ const districts = React.useMemo(() => {
     states.find((s) => s.code === selectedState)?.name || selectedState;
 
 
-const params = new URLSearchParams({
-    job_role: selectedRole.role,
-    state: selectedStateName,
-    district: selectedDistrict,
-});
-            const url = `http://127.0.0.1:8000/api/employer/verified-list/?${params.toString()}`;
-
-            const res = await fetch(url);
-
-            if (!res.ok) {
-                throw new Error("Failed to fetch workers");
-            }
-
-            const data = await res.json();
+            const params = new URLSearchParams({
+                job_role: selectedRole.role,
+                state: selectedStateName,
+                district: selectedDistrict,
+            });
+            const data = await API.get(`/employer/verified-list/?${params.toString()}`);
 
             setWorkers(Array.isArray(data) ? data : []);
         } catch (error) {
@@ -579,26 +730,12 @@ const params = new URLSearchParams({
                 throw new Error("Employer email not found.");
             }
 
-            const res = await fetch("http://127.0.0.1:8000/api/hirerequest/create/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    customer_email: customerEmail,
-                    employer_email: employerEmail,
-                    job_role: jobRole,
-                    message: message,
-                }),
+            const data = await API.post("/hirerequest/create/", {
+                customer_email: customerEmail,
+                employer_email: employerEmail,
+                job_role: jobRole,
+                message: message,
             });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(
-                    data?.error || data?.message || "Failed to send hire request"
-                );
-            }
 
             setHireCount((c) => c + 1);
             setHireMessages((prev) => ({ ...prev, [workerName]: "" }));
@@ -607,7 +744,12 @@ const params = new URLSearchParams({
             setSnackbarOpen(true);
         } catch (error) {
             setSnackbarSeverity("error");
-            setSnackbarMessage(error.message || "Failed to send hire request");
+            setSnackbarMessage(
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error.message ||
+                "Failed to send hire request"
+            );
             setSnackbarOpen(true);
         } finally {
             setSendingHireId(null);
@@ -631,7 +773,7 @@ const params = new URLSearchParams({
 
     const navItems = [
         { text: "Home", icon: <HomeIcon sx={{ fontSize: 18 }} /> },
-        { text: "My Order", icon: <AssignmentIcon sx={{ fontSize: 18 }} /> },
+        { text: "My Orders", icon: <AssignmentIcon sx={{ fontSize: 18 }} /> },
         { text: "Notifications", icon: <NotificationsIcon sx={{ fontSize: 18 }} />, badge: unreadNotificationsCount },
     ];
 
@@ -1186,8 +1328,12 @@ const params = new URLSearchParams({
                 {activeMenu === "Home" && renderDashboardContent()}
                 {activeMenu === "Messages" && <MessagesSection />}
                 {activeMenu === "Workers" && <CustomerProfileSection />}
-                {activeMenu === "My Requests" && (
-                    <CustomerRequestsSection hireCount={hireCount} />
+                {activeMenu === "My Orders" && (
+                    <CustomerRequestsSection
+                        requests={customerRequests}
+                        loading={requestsLoading}
+                        onOpenProgress={handleOpenProgressFromJob}
+                    />
                 )}
                 {activeMenu === "Notifications" && (
                     <CustomerNotificationPanel onNotificationUpdate={fetchNotificationsList} />
@@ -1209,6 +1355,22 @@ const params = new URLSearchParams({
                     {snackbarMessage}
                 </Alert>
             </Snackbar>
+
+            {selectedProgressJob && (
+                <JobProgressDialog
+                    open={progressOpen}
+                    onClose={() => {
+                        setProgressOpen(false);
+                        setSelectedProgressJob(null);
+                    }}
+                    hireRequestId={selectedProgressJob.id}
+                    role="customer"
+                    otherPartyName={selectedProgressJob.employer_email || "Employer"}
+                    jobRole={selectedProgressJob.job_role}
+                    requestDate={selectedProgressJob.created_at}
+                    currentRequestStatus={selectedProgressJob.status}
+                />
+            )}
         </Box>
     );
 }

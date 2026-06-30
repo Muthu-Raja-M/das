@@ -40,6 +40,7 @@ export default function MyJobsSection({
     onUpdateStatus,
     updatingRequestId,
     onOpenMessage,
+    onOpenProgress,
 }) {
     if (!jobs.length) {
         return (
@@ -166,14 +167,24 @@ export default function MyJobsSection({
                                             </Button>
                                         </Stack>
                                     ) : status === "accepted" ? (
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => onOpenMessage?.(job)}
-                                            sx={{ textTransform: "none", fontWeight: 700 }}
-                                        >
-                                            Message
-                                        </Button>
+                                        <Stack direction="row" spacing={1}>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                onClick={() => onOpenMessage?.(job)}
+                                                sx={{ textTransform: "none", fontWeight: 700 }}
+                                            >
+                                                Message
+                                            </Button>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                onClick={() => onOpenProgress?.(job)}
+                                                sx={{ textTransform: "none", fontWeight: 700, backgroundColor: "#1C6EA4" }}
+                                            >
+                                                Track Progress
+                                            </Button>
+                                        </Stack>
                                     ) : (
                                         <Typography fontSize={13} color="text.secondary">
                                             No action

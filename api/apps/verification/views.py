@@ -1,12 +1,20 @@
 from django.utils import timezone
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from common.permissions.auth import CustomJWTAuthentication
+from common.permissions.roles import IsAdminUser, IsEmployerUser
+from common.permissions.ownership import IsProfileOwner
+from django.db import transaction
+import logging
 
 from apps.employer.models import Employer
 from .models import EmployerVerification
 from .serializers import EmployerVerificationSerializer
+
+logger = logging.getLogger(__name__)
 
 
 def generate_employer_id():
@@ -31,6 +39,8 @@ def generate_employer_id():
 
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsEmployerUser, IsProfileOwner])
 def submit_employer_verification(request):
     email = request.data.get("email")
 
@@ -38,26 +48,28 @@ def submit_employer_verification(request):
         return Response({"message": "Employer email is required"}, status=400)
 
     try:
-        employer = Employer.objects.get(email=email)
+        with transaction.atomic():
+            employer = Employer.objects.select_for_update().get(email=email)
+            verification, created = EmployerVerification.objects.select_for_update().get_or_create(
+                employer=employer
+            )
+
+            verification.face_image = request.FILES.get("face_image", verification.face_image)
+            verification.aadhar_image = request.FILES.get("aadhar_image", verification.aadhar_image)
+            verification.pan_image = request.FILES.get("pan_image", verification.pan_image)
+            verification.driving_licence_image = request.FILES.get(
+                "driving_licence_image",
+                verification.driving_licence_image
+            )
+
+            verification.status = "pending"
+            verification.admin_notes = ""
+            verification.approved_at = None
+            verification.save()
+
+            logger.info("Security Audit Alert: Employer %s submitted verification documents", email)
     except Employer.DoesNotExist:
         return Response({"message": "Employer not found"}, status=404)
-
-    verification, created = EmployerVerification.objects.get_or_create(
-        employer=employer
-    )
-
-    verification.face_image = request.FILES.get("face_image", verification.face_image)
-    verification.aadhar_image = request.FILES.get("aadhar_image", verification.aadhar_image)
-    verification.pan_image = request.FILES.get("pan_image", verification.pan_image)
-    verification.driving_licence_image = request.FILES.get(
-        "driving_licence_image",
-        verification.driving_licence_image
-    )
-
-    verification.status = "pending"
-    verification.admin_notes = ""
-    verification.approved_at = None
-    verification.save()
 
     serializer = EmployerVerificationSerializer(
         verification,
@@ -72,6 +84,8 @@ def submit_employer_verification(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def get_employer_documents(request, employer_id):
     try:
         employer = Employer.objects.get(id=employer_id)
@@ -106,34 +120,38 @@ def get_employer_documents(request, employer_id):
 
 
 @api_view(["POST"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def admin_approve_verification(request, employer_id):
     try:
-        employer = Employer.objects.get(id=employer_id)
+        with transaction.atomic():
+            employer = Employer.objects.select_for_update().get(id=employer_id)
+            verification = EmployerVerification.objects.select_for_update().filter(employer=employer).first()
+
+            if not verification:
+                return Response({"message": "Verification record not found"}, status=404)
+
+            if not verification.employer_unique_id:
+                generated_id = generate_employer_id()
+                verification.employer_unique_id = generated_id
+            else:
+                generated_id = verification.employer_unique_id
+
+            verification.status = "approved"
+            verification.approved_at = timezone.now()
+            verification.admin_notes = (
+                request.data.get("admin_notes")
+                or "Your account has been verified by Admin."
+            )
+            verification.save()
+
+            employer.is_verified = True
+            employer.employer_id = generated_id
+            employer.save()
+
+            logger.info("Security Audit Alert: Admin %s APPROVED verification for Employer %s (ID: %s)", request.user.email, employer.email, employer.id)
     except Employer.DoesNotExist:
         return Response({"message": "Employer not found"}, status=404)
-
-    verification = EmployerVerification.objects.filter(employer=employer).first()
-
-    if not verification:
-        return Response({"message": "Verification record not found"}, status=404)
-
-    if not verification.employer_unique_id:
-        generated_id = generate_employer_id()
-        verification.employer_unique_id = generated_id
-    else:
-        generated_id = verification.employer_unique_id
-
-    verification.status = "approved"
-    verification.approved_at = timezone.now()
-    verification.admin_notes = (
-        request.data.get("admin_notes")
-        or "Your account has been verified by Admin."
-    )
-    verification.save()
-
-    employer.is_verified = True
-    employer.employer_id = generated_id
-    employer.save()
 
     return Response({
         "success": True,
@@ -145,30 +163,34 @@ def admin_approve_verification(request, employer_id):
 
 
 @api_view(["POST"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def admin_reject_verification(request, employer_id):
     try:
-        employer = Employer.objects.get(id=employer_id)
+        with transaction.atomic():
+            employer = Employer.objects.select_for_update().get(id=employer_id)
+            verification = EmployerVerification.objects.select_for_update().filter(employer=employer).first()
+
+            if not verification:
+                return Response({"message": "Verification record not found"}, status=404)
+
+            reject_message = (
+                request.data.get("admin_notes")
+                or request.data.get("message")
+                or "Your verification was rejected by Admin."
+            ).strip()
+
+            verification.status = "rejected"
+            verification.admin_notes = reject_message
+            verification.approved_at = None
+            verification.save()
+
+            employer.is_verified = False
+            employer.save()
+
+            logger.info("Security Audit Alert: Admin %s REJECTED verification for Employer %s (ID: %s)", request.user.email, employer.email, employer.id)
     except Employer.DoesNotExist:
         return Response({"message": "Employer not found"}, status=404)
-
-    verification = EmployerVerification.objects.filter(employer=employer).first()
-
-    if not verification:
-        return Response({"message": "Verification record not found"}, status=404)
-
-    reject_message = (
-        request.data.get("admin_notes")
-        or request.data.get("message")
-        or "Your verification was rejected by Admin."
-    ).strip()
-
-    verification.status = "rejected"
-    verification.admin_notes = reject_message
-    verification.approved_at = None
-    verification.save()
-
-    employer.is_verified = False
-    employer.save()
 
     return Response({
         "success": True,
@@ -179,6 +201,8 @@ def admin_reject_verification(request, employer_id):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsEmployerUser, IsProfileOwner])
 def get_employer_alert(request):
     email = request.GET.get("email")
 
@@ -219,6 +243,8 @@ def get_employer_alert(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def admin_verification_list(request):
     verifications = EmployerVerification.objects.all().order_by("-id")
     serializer = EmployerVerificationSerializer(verifications, many=True, context={"request": request})
@@ -226,6 +252,8 @@ def admin_verification_list(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def admin_verification_detail(request, verification_id):
     try:
         verification = EmployerVerification.objects.get(id=verification_id)

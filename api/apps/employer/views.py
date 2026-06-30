@@ -1,10 +1,19 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from common.permissions.auth import CustomJWTAuthentication
+from common.permissions.roles import IsAdminUser
+from common.permissions.ownership import IsProfileOwner, IsProfileOwnerOrAdmin
+from django.db import transaction
+import logging
+
 from .serializers import EmployerSerializer
 from .models import Employer
 from apps.customer.models import Customer
 from apps.verification.models import EmployerVerification
+
+logger = logging.getLogger(__name__)
 
 
 def email_exists_in_any_table(email):
@@ -43,8 +52,11 @@ def create_employer(request):
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 # ADMIN USE (all employers)
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def get_employer_list(request):
     employers = Employer.objects.filter(is_deleted=False).order_by("-id")
 
@@ -141,80 +153,88 @@ def generate_employer_id():
 
 
 @api_view(["PATCH"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsAdminUser])
 def verify_employer(request, id):
     action = request.data.get("action")
 
     try:
-        employer = Employer.objects.get(id=id)
+        with transaction.atomic():
+            employer = Employer.objects.select_for_update().get(id=id)
+            verification = EmployerVerification.objects.select_for_update().filter(employer=employer).first()
+            document_exists = verification is not None
+
+            if action == "approve":
+                if not document_exists:
+                    return Response(
+                        {"message": "Cannot approve. Employer has not submitted documents."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                employer.is_verified = True
+
+                if not employer.employer_id:
+                    employer.employer_id = generate_employer_id()
+
+                employer.save()
+
+                if verification:
+                    verification.status = "approved"
+                    verification.employer_unique_id = employer.employer_id
+                    verification.save()
+
+                logger.info("Security Audit Alert: Admin %s APPROVED Employer profile %s (ID: %s)", request.user.email, employer.email, employer.id)
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Employer approved successfully",
+                        "employer_id": employer.employer_id,
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            if action == "reject":
+                employer.is_verified = False
+                employer.save()
+
+                if verification:
+                    verification.status = "rejected"
+                    verification.save()
+
+                logger.info("Security Audit Alert: Admin %s REJECTED Employer profile %s (ID: %s)", request.user.email, employer.email, employer.id)
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Employer rejected successfully",
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            if action == "delete":
+                employer.is_deleted = True
+                employer.is_verified = False
+                employer.delete_message = request.data.get("delete_message") or ""
+                employer.save()
+
+                if verification:
+                    verification.status = "rejected"
+                    verification.save()
+
+                logger.info("Security Audit Alert: Admin %s DELETED Employer profile %s (ID: %s)", request.user.email, employer.email, employer.id)
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Employer deleted successfully",
+                    },
+                    status=status.HTTP_200_OK
+                )
     except Employer.DoesNotExist:
         return Response(
             {"message": "Employer not found"},
             status=status.HTTP_404_NOT_FOUND
-        )
-
-    verification = EmployerVerification.objects.filter(employer=employer).first()
-    document_exists = verification is not None
-
-    if action == "approve":
-        if not document_exists:
-            return Response(
-                {"message": "Cannot approve. Employer has not submitted documents."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        employer.is_verified = True
-
-        if not employer.employer_id:
-            employer.employer_id = generate_employer_id()
-
-        employer.save()
-
-        if verification:
-            verification.status = "approved"
-            verification.employer_unique_id = employer.employer_id
-            verification.save()
-
-        return Response(
-            {
-                "success": True,
-                "message": "Employer approved successfully",
-                "employer_id": employer.employer_id,
-            },
-            status=status.HTTP_200_OK
-        )
-
-    if action == "reject":
-        employer.is_verified = False
-        employer.save()
-
-        if verification:
-            verification.status = "rejected"
-            verification.save()
-
-        return Response(
-            {
-                "success": True,
-                "message": "Employer rejected successfully",
-            },
-            status=status.HTTP_200_OK
-        )
-
-    if action == "delete":
-        employer.is_deleted = True
-        employer.is_verified = False
-        employer.delete_message = request.data.get("delete_message") or ""
-        employer.save()
-
-        if verification:
-            verification.status = "rejected"
-            verification.save()
-
-        return Response(
-            {
-                "success": True,
-                "message": "Employer deleted successfully",
-            },
-            status=status.HTTP_200_OK
         )
 
     return Response(
@@ -224,6 +244,8 @@ def verify_employer(request, id):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsProfileOwnerOrAdmin])
 def get_employer_profile(request):
     email = request.GET.get("email", "").strip().lower()
 
@@ -259,6 +281,8 @@ def get_employer_detail(request, employer_id):
 
 
 @api_view(["PUT"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsProfileOwner])
 def update_employer_profile(request):
     email = request.GET.get("email")
 
@@ -269,22 +293,24 @@ def update_employer_profile(request):
         )
 
     try:
-        employer = Employer.objects.get(email=email)
+        with transaction.atomic():
+            employer = Employer.objects.select_for_update().get(email=email)
+            employer.username = request.data.get("name", employer.username)
+            employer.phone = request.data.get("phone", employer.phone)
+            employer.job_role = request.data.get("job_role", employer.job_role)
+            employer.state = request.data.get("state", employer.state)
+            employer.district = request.data.get("district", employer.district)
+            employer.experience = request.data.get("experience", employer.experience)
+            employer.daily_rate = request.data.get("daily_rate", employer.daily_rate)
+
+            employer.save()
+
+            logger.info("Security Audit Alert: Employer %s updated their profile details", email)
     except Employer.DoesNotExist:
         return Response(
             {"error": "Employer not found"},
             status=status.HTTP_404_NOT_FOUND
         )
-
-    employer.username = request.data.get("name", employer.username)
-    employer.phone = request.data.get("phone", employer.phone)
-    employer.job_role = request.data.get("job_role", employer.job_role)
-    employer.state = request.data.get("state", employer.state)
-    employer.district = request.data.get("district", employer.district)
-    employer.experience = request.data.get("experience", employer.experience)
-    employer.daily_rate = request.data.get("daily_rate", employer.daily_rate)
-
-    employer.save()
 
     return Response(
         {"message": "Profile updated successfully"},

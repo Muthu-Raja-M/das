@@ -25,6 +25,7 @@ import EmployerProfile from "../components/EmployerProfile";
 import EmployeeNotificationPanel from "../../notifications/components/EmployeeNotificationPanel";
 import NotificationBellDropdown from "../../notifications/components/NotificationBellDropdown";
 import { getEmployeeNotifications } from "../../notifications/services/notificationService";
+import JobProgressDialog from "../../hire-request/components/JobProgressDialog";
 
 import { useEmployerProfile } from "../hooks/useEmployer";
 import { useHireRequests } from "../../hire-request/hooks/useHireRequest";
@@ -204,6 +205,14 @@ function EmployerDashboard() {
         );
     };
 
+    const [progressOpen, setProgressOpen] = useState(false);
+    const [selectedProgressJob, setSelectedProgressJob] = useState(null);
+
+    const handleOpenProgressFromJob = (job) => {
+        setSelectedProgressJob(job);
+        setProgressOpen(true);
+    };
+
     const handleOpenMessageFromJob = (job) => {
         setSelectedMessageThread({
             hire_request_id: job.id,
@@ -359,6 +368,7 @@ function EmployerDashboard() {
                         onOpenMessage={handleOpenMessageFromJob}
                         onUpdateStatus={handleRequestStatusUpdate}
                         updatingRequestId={updatingRequestId}
+                        onOpenProgress={handleOpenProgressFromJob}
                     />
                 )}
 
@@ -384,6 +394,22 @@ function EmployerDashboard() {
                     {snackMsg}
                 </Alert>
             </Snackbar>
+
+            {selectedProgressJob && (
+                <JobProgressDialog
+                    open={progressOpen}
+                    onClose={() => {
+                        setProgressOpen(false);
+                        setSelectedProgressJob(null);
+                    }}
+                    hireRequestId={selectedProgressJob.id}
+                    role="employer"
+                    otherPartyName={selectedProgressJob.customer?.fullname || selectedProgressJob.customer_name || selectedProgressJob.customer_email || "Customer"}
+                    jobRole={selectedProgressJob.job_role || selectedProgressJob.jobRole}
+                    requestDate={selectedProgressJob.created_at || selectedProgressJob.createdAt}
+                    currentRequestStatus={selectedProgressJob.status}
+                />
+            )}
         </Box>
     );
 }

@@ -7,7 +7,7 @@ from django.db import transaction
 
 from .models import Notification
 from .serializers import NotificationSerializer
-from .auth import CustomJWTAuthentication
+from common.permissions.auth import CustomJWTAuthentication
 from apps.hire_request.models import HireRequest
 from apps.customer.models import Customer
 from apps.employer.models import Employer

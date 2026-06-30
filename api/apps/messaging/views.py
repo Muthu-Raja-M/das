@@ -1,12 +1,26 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from common.permissions.auth import CustomJWTAuthentication
+from common.permissions.ownership import (
+    IsProfileOwnerOrAdmin,
+    IsMessageSenderAndParticipant,
+    IsConversationParticipant
+)
+from django.db import transaction
+import logging
+
 from .models import ChatMessage
 from .serializers import ChatMessageSerializer
 from ..hire_request.models import HireRequest
 
+logger = logging.getLogger(__name__)
+
 
 @api_view(["POST"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsMessageSenderAndParticipant])
 def send_message(request):
     sender_email = request.data.get("sender_email")
     receiver_email = request.data.get("receiver_email")
@@ -26,22 +40,25 @@ def send_message(request):
         return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        hire_request = HireRequest.objects.get(id=hire_request_id)
+        with transaction.atomic():
+            hire_request = HireRequest.objects.select_for_update().get(id=hire_request_id)
+
+            if str(hire_request.status).lower() != "accepted":
+                return Response(
+                    {"error": "Messages are allowed only after request is accepted"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            chat = ChatMessage.objects.create(
+                sender_email=sender_email.strip().lower(),
+                receiver_email=receiver_email.strip().lower(),
+                hire_request=hire_request,
+                message=message.strip(),
+            )
+
+            logger.info("Security Audit Alert: Chat message sent by %s to %s for HireRequest %s", sender_email, receiver_email, hire_request_id)
     except HireRequest.DoesNotExist:
         return Response({"error": "Hire request not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    if str(hire_request.status).lower() != "accepted":
-        return Response(
-            {"error": "Messages are allowed only after request is accepted"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    chat = ChatMessage.objects.create(
-        sender_email=sender_email.strip().lower(),
-        receiver_email=receiver_email.strip().lower(),
-        hire_request=hire_request,
-        message=message.strip(),
-    )
 
     serializer = ChatMessageSerializer(chat)
 
@@ -55,6 +72,8 @@ def send_message(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsConversationParticipant])
 def get_conversation(request, hire_request_id):
     try:
         hire_request = HireRequest.objects.get(id=hire_request_id)
@@ -80,6 +99,8 @@ def get_conversation(request, hire_request_id):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsProfileOwnerOrAdmin])
 def get_employer_message_threads(request):
     employer_email = request.GET.get("email")
 
@@ -110,6 +131,8 @@ def get_employer_message_threads(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsProfileOwnerOrAdmin])
 def get_customer_message_threads(request):
     customer_email = request.GET.get("email")
 
@@ -140,6 +163,8 @@ def get_customer_message_threads(request):
 
 
 @api_view(["GET"])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated, IsProfileOwnerOrAdmin])
 def get_customer_messages(request):
     customer_email = request.GET.get("customer_email", "").strip().lower()
 
