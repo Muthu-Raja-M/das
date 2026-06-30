@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def get_employee_notifications(request):
+    print("--------------------------------------------------")
+    print("DEBUG: get_employee_notifications endpoint called")
+    print("DEBUG: Requesting User:", request.user)
+    print("DEBUG: Resolved Role:", getattr(request.user, "role", None))
+    print("DEBUG: Authorization Header:", request.headers.get("Authorization"))
+    print("--------------------------------------------------")
     if request.user.role != "employer":
         return Response({"error": "Only employers/employees can access this endpoint"}, status=status.HTTP_403_FORBIDDEN)
     
@@ -35,6 +41,12 @@ def get_employee_notifications(request):
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def get_customer_notifications(request):
+    print("--------------------------------------------------")
+    print("DEBUG: get_customer_notifications endpoint called")
+    print("DEBUG: Requesting User:", request.user)
+    print("DEBUG: Resolved Role:", getattr(request.user, "role", None))
+    print("DEBUG: Authorization Header:", request.headers.get("Authorization"))
+    print("--------------------------------------------------")
     if request.user.role != "customer":
         return Response({"error": "Only customers can access this endpoint"}, status=status.HTTP_403_FORBIDDEN)
     
